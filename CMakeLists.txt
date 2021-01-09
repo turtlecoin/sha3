@@ -12,11 +12,12 @@ set(LIB_PATCH_VERSION "0")
 set(LIB_VERSION_STRING "${LIB_MAJOR_VERSION}.${LIB_MINOR_VERSION}.${LIB_PATCH_VERSION}")
 
 if(CMAKE_VERSION VERSION_LESS 3.0)
-    project(sha3 CXX)
+    project(sha3 C)
+    enable_language(C)
     enable_language(CXX)
 else()
     cmake_policy(SET CMP0048 NEW)
-    project(sha3 VERSION "${LIB_VERSION_STRING}" LANGUAGES CXX)
+    project(sha3 VERSION "${LIB_VERSION_STRING}" LANGUAGES C CXX)
 endif()
 
 ## This section describes our general CMake setup options
@@ -35,8 +36,19 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(STATIC ON CACHE BOOL FORCE "Link libraries statically? Forced to ON")
 add_definitions(-DSTATICLIB)
 
+option(BUILD_BENCHMARK "Build benchmark testing tool" OFF)
+if(DEFINED ENV${BUILD_BENCHMARK})
+    set(BUILD_BENCHMARK $ENV{BUILD_BENCHMARK})
+    message(STATUS "SHA3: Activating benchmark testing tool")
+endif()
+
+if(MSVC)
+    add_definitions("/EHsc -std:c++17 /DWIN32_LEAN_AND_MEAN /O2 /wd4267")
+endif()
+
 if(NOT MSVC)
-  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=c11 -Wno-c99-compat")
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=c11 -O3")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17 -O3")
 endif()
 
 include_directories(include)
@@ -50,10 +62,19 @@ add_library(sha3 STATIC ${SHA3_SRC})
 set_property(TARGET sha3 PROPERTY C_STANDARD 90)
 set_property(TARGET sha3 PROPERTY SOVERSION 1)
 
+if(BUILD_BENCHMARK)
+    set(BENCHMARK_SOURCES src/benchmark.cpp)
+
+    add_executable(benchmark ${BENCHMARK_SOURCES})
+    target_link_libraries(benchmark sha3)
+    set_property(TARGET benchmark PROPERTY OUTPUT_NAME "benchmark")
+endif()
+
 foreach(flag_var
         CMAKE_C_FLAGS CMAKE_C_FLAGS_DEBUG CMAKE_C_FLAGS_RELEASE
         CMAKE_C_FLAGS_MINSIZEREL CMAKE_C_FLAGS_RELWITHDEBINFO
         CMAKE_CXX_FLAGS CMAKE_CXX_FLAGS_DEBUG CMAKE_CXX_FLAGS_RELEASE
         CMAKE_CXX_FLAGS_MINSIZEREL CMAKE_CXX_FLAGS_RELWITHDEBINFO)
     string(REGEX REPLACE "/RTC[^ ]*" "" ${flag_var} "${${flag_var}}")
+    string(REGEX REPLACE "/Od" "" ${flag_var} "${${flag_var}}")
 endforeach(flag_var)
